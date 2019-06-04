@@ -1,5 +1,4 @@
 
-
 def load_data(file_name):
     output_data = []
     input_data = open(file_name, 'r')
