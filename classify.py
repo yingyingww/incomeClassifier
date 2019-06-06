@@ -5,6 +5,10 @@ import math
 
 
 def represents_integer(s):
+    """Return true if the string s is an integer, false otherwise.
+    
+    This is used for determining if an attribute is categorical or continuous.
+    """
     try:
         int(s)
         return True
@@ -13,6 +17,12 @@ def represents_integer(s):
 
 
 def find_baseline_attribute(data):
+    """Finds the singular attribute of the data that has the most predictive power.
+    (ie. The attribute which allows us to predict the highest proportion of the training data.)
+    
+    Arguments:
+    data --- A list of dictionaries as returned by the function load_data in load_data.py.
+    """
     best_ratio = 0
     best_attribute = None
     data_length = len(data)
@@ -46,6 +56,15 @@ def find_baseline_attribute(data):
 
 
 class Node:
+    """The class which represents the decision tree.
+
+    Instance Variables:
+    attribute -- The attribute on which this nodes splits.
+    children -- The children of this node.
+    label -- The label we should give any data point at this node, assuming the data point
+        is not 
+
+    """
     def __init__(self, category=None, label=0):
         self.attribute = None
         self.children = []
@@ -59,7 +78,7 @@ def decision_tree_classify(item, root):
 
 def build_decision_tree(data):
     root = Node()
-    _build_decision_tree(data, root, [attribute for attribute in data[0]])
+    _build_decision_tree(data, root, [attribute for attribute in data[0]] - ['fnlwgt'])
     return root
 
 
@@ -75,13 +94,23 @@ def _build_decision_tree(data, node, attributes):
 
     max_information_gain = 0
     best_attribute = None
+    best_threshold = None
     for attribute in attributes:
-        information_gain = get_information_gain(data, attribute)
+        threshold = None
+        if(represents_integer(data[0][attribute])):
+            threshold = find_threshold(data, attribute)
+            information_gain = get_information_gain(data, attribute, threshold)
+        else:
+            information_gain = get_information_gain(data, attribute)
         if information_gain > max_information_gain:
             max_information_gain = information_gain
             best_attribute = attribute
+            best_threshold = threshold
 
-    subsets = split_on_attribute(data, best_attribute)
+    if represents_integer(data[0][best_attribute]):
+        subsets = split_on_attribute(data, best_attribute, best_threshold)
+    else:
+        subsets = split_on_attribute(data, best_attribute)
     node.attribute = best_attribute
 
     for subset in subsets:
@@ -94,9 +123,24 @@ def _build_decision_tree(data, node, attributes):
 
 
 def split_on_attribute(data, attribute, threshold=None):
+    if threshold is not None:
+        return split_on_attribute_threshold(data, attribute, threshold)
+
     data_categories = defaultdict(lambda: [])
     for data_point in data:
         data_categories[data_point[attribute]].append(data_point)
+
+    return [(data_categories[key], key) for key in data_categories]
+
+
+def split_on_attribute_threshold(data, attribute, threshold):
+    data_categories = {'below': [], 'above': []}
+
+    for data_point in data:
+        if data_point[attribute] < threshold:
+            data_categories['below'].append(data_point)
+        else:
+            data_categories['above'].append(data_point)
 
     return [(data_categories[key], key) for key in data_categories]
 
@@ -111,6 +155,7 @@ def majority_label(data):
             counts_positive += 1
 
     return 0 if counts_negative > counts_positive else 1
+
 
 def get_counts(data, attribute, threshold=None):
     if threshold is not None:
@@ -141,12 +186,6 @@ def get_counts_threshold(data, attribute, threshold):
     return counts
 
 
-def max_information_gain(data_length, counts):
-    pass
-
-
-
-
 def find_threshold(data, attribute):
     sorted_data = sorted(data, key=lambda i: i[attribute])
     previous_class = -1
@@ -169,7 +208,37 @@ def find_threshold(data, attribute):
     return best_threshold
 
 
-def get_information_gain(sorted_data, attribute, threshold=None):
+def get_information_gain(data, attribute, threshold=None, data_sorted=True):
+    if threshold is not None:
+        if data_sorted:
+            return get_information_gain_threshold(data, attribute, threshold)
+        return get_information_gain_threshold(sorted(data, key=lambda i: i[attribute]))
+
+    counts = get_counts(data, attribute)
+    total_0 = 0
+    total_1 = 0
+
+    for category in counts:
+        total_0 += counts[category][0]
+        total_1 += counts[category][1]
+    entropy = -((total_0 / len(data) * math.log(total_0 / len(data), 2)) + (total_1 / len(data) * math.log(total_1 / len(data), 2)))
+
+    conditional_entropy = 0
+    for category in counts:
+        if counts[category][0] == 0 or counts[category][1] == 0:
+            continue
+        total = counts[category][0] + counts[category][1]
+        proportion = total / len(data)
+        label_0 = (counts[category][0] / total) * (math.log(counts[category][0] / total, 2))
+        label_1 = (counts[category][1] / total) * (math.log(counts[category][1] / total, 2))
+        conditional_entropy += proportion * (label_0 + label_1)
+    conditional_entropy *= -1
+
+    return entropy - conditional_entropy
+
+
+
+def get_information_gain_threshold(sorted_data, attribute, threshold):
     counts_bt = [0, 0]  # bt = below threshold, at = above threshold
     counts_at = [0, 0]
     current_index = 0
@@ -220,4 +289,4 @@ def parse_args():
 data = load_data('data/adult.data')
 print(get_counts(data, 'education'))
 print(find_threshold(data, 'age'))
-print(find_baseline_attribute(data))
+print(get_information_gain(data, 'education'))
