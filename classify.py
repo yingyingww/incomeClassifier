@@ -46,9 +46,11 @@ def find_baseline_attribute(data):
 
 
 class Node:
-    def __init__(self):
-        self.left = None
-        self.right = None
+    def __init__(self, category=None, label=0):
+        self.attribute = None
+        self.children = []
+        self.label = label
+        self.category = category
 
 
 def decision_tree_classify(item, root):
@@ -56,8 +58,59 @@ def decision_tree_classify(item, root):
 
 
 def build_decision_tree(data):
-    pass
+    root = Node()
+    _build_decision_tree(data, root, [attribute for attribute in data[0]])
+    return root
 
+
+def _build_decision_tree(data, node, attributes):
+    data_classes = [data_point['class'] for data_point in data]
+    if len(attributes) == 0:
+        node.label = majority_label(data)
+        return
+    if len(data_classes) == len(set(data_classes)):
+        node.label = data[0]['class']
+        return
+    #  if examples have exactly the same attributes, stop recursing
+
+    max_information_gain = 0
+    best_attribute = None
+    for attribute in attributes:
+        information_gain = get_information_gain(data, attribute)
+        if information_gain > max_information_gain:
+            max_information_gain = information_gain
+            best_attribute = attribute
+
+    subsets = split_on_attribute(data, best_attribute)
+    node.attribute = best_attribute
+
+    for subset in subsets:
+        new_node = Node(category=subset[1])
+        node.children.append(new_node)
+        if len(subset[0]) == 0:
+            new_node.label = majority_label(data)
+        else:
+            _build_decision_tree(subset[0], new_node, attributes - [best_attribute])
+
+
+def split_on_attribute(data, attribute, threshold=None):
+    data_categories = defaultdict(lambda: [])
+    for data_point in data:
+        data_categories[data_point[attribute]].append(data_point)
+
+    return [(data_categories[key], key) for key in data_categories]
+
+
+def majority_label(data):
+    counts_positive = 0
+    counts_negative = 0
+    for data_point in data:
+        if data_point['class'] == 0:
+            counts_negative += 1
+        else:
+            counts_positive += 1
+
+    return 0 if counts_negative > counts_positive else 1
 
 def get_counts(data, attribute, threshold=None):
     if threshold is not None:
@@ -87,12 +140,11 @@ def get_counts_threshold(data, attribute, threshold):
             counts['above'][1] += 1
     return counts
 
+
 def max_information_gain(data_length, counts):
     pass
 
 
-def split_on_attribute(data, attribute, attribute_category):
-    pass
 
 
 def find_threshold(data, attribute):
@@ -137,10 +189,8 @@ def get_information_gain(sorted_data, attribute, threshold=None):
     total_bt = (counts_bt[0] + counts_bt[1])
     total_at = (counts_at[0] + counts_at[1])
 
-    
     if 0 in counts_bt or 0 in counts_at:
         return 0
-
 
     probability_bt = total_bt / len(sorted_data)
     probability_at = total_at / len(sorted_data)
