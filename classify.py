@@ -71,6 +71,13 @@ class Node:
         self.label = label
         self.category = category
 
+    def display(self, level=0):
+        print('\t' * level + repr(self.attribute))
+        if level > 1:
+            return
+        for child in self.children:
+            child.display(level + 1)
+
 
 def decision_tree_classify(item, root):
     pass
@@ -78,7 +85,10 @@ def decision_tree_classify(item, root):
 
 def build_decision_tree(data):
     root = Node()
-    _build_decision_tree(data, root, [attribute for attribute in data[0]] - ['fnlwgt'])
+    attributes = [attribute for attribute in data[0]]
+    attributes.remove('fnlwgt')
+    attributes.remove('class')
+    _build_decision_tree(data, root, attributes)
     return root
 
 
@@ -92,7 +102,7 @@ def _build_decision_tree(data, node, attributes):
         return
     #  if examples have exactly the same attributes, stop recursing
 
-    max_information_gain = 0
+    max_information_gain = -1
     best_attribute = None
     best_threshold = None
     for attribute in attributes:
@@ -119,7 +129,9 @@ def _build_decision_tree(data, node, attributes):
         if len(subset[0]) == 0:
             new_node.label = majority_label(data)
         else:
-            _build_decision_tree(subset[0], new_node, attributes - [best_attribute])
+            new_attributes = list(attributes)
+            new_attributes.remove(best_attribute)
+            _build_decision_tree(subset[0], new_node, new_attributes)
 
 
 def split_on_attribute(data, attribute, threshold=None):
@@ -137,7 +149,7 @@ def split_on_attribute_threshold(data, attribute, threshold):
     data_categories = {'below': [], 'above': []}
 
     for data_point in data:
-        if data_point[attribute] < threshold:
+        if int(data_point[attribute]) < threshold:
             data_categories['below'].append(data_point)
         else:
             data_categories['above'].append(data_point)
@@ -175,11 +187,11 @@ def get_counts(data, attribute, threshold=None):
 def get_counts_threshold(data, attribute, threshold):
     counts = defaultdict(lambda: [0, 0])
     for item in data:
-        if item['class'] == 0 and item[attribute] < threshold:
+        if item['class'] == 0 and int(item[attribute]) < threshold:
             counts['below'][0] += 1
-        elif item['class'] == 0 and item[attribute] >= threshold:
+        elif item['class'] == 0 and int(item[attribute]) >= threshold:
             counts['above'][0] += 1
-        elif item['class'] == 1 and item[attribute] < threshold:
+        elif item['class'] == 1 and int(item[attribute]) < threshold:
             counts['below'][1] += 1
         else:
             counts['above'][1] += 1
@@ -198,30 +210,28 @@ def find_threshold(data, attribute):
         if sorted_data[x][attribute] not in tested and sorted_data[x]['class'] != previous_class:
             threshold = sorted_data[x][attribute]
             tested.append(threshold)
-            threshold_info_gain = get_information_gain(sorted_data, attribute, threshold)
+            threshold_info_gain = get_information_gain_threshold(sorted_data, attribute, threshold)
             if threshold_info_gain > max_info_gain:
                 max_info_gain = threshold_info_gain
                 best_threshold = threshold
 
         previous_class = sorted_data[x]['class']
 
-    return best_threshold
+    return int(best_threshold)
 
 
 def get_information_gain(data, attribute, threshold=None, data_sorted=True):
-    if threshold is not None:
-        if data_sorted:
-            return get_information_gain_threshold(data, attribute, threshold)
-        return get_information_gain_threshold(sorted(data, key=lambda i: i[attribute]))
-
-    counts = get_counts(data, attribute)
+    counts = get_counts(data, attribute, threshold)
     total_0 = 0
     total_1 = 0
 
     for category in counts:
         total_0 += counts[category][0]
         total_1 += counts[category][1]
-    entropy = -((total_0 / len(data) * math.log(total_0 / len(data), 2)) + (total_1 / len(data) * math.log(total_1 / len(data), 2)))
+
+    entropy = 0
+    if total_0 != 0 and total_1 != 0:
+        entropy = -((total_0 / len(data) * math.log(total_0 / len(data), 2)) + (total_1 / len(data) * math.log(total_1 / len(data), 2)))
 
     conditional_entropy = 0
     for category in counts:
@@ -288,5 +298,5 @@ def parse_args():
 
 data = load_data('data/adult.data')
 print(get_counts(data, 'education'))
-print(find_threshold(data, 'age'))
-print(get_information_gain(data, 'education'))
+tree = build_decision_tree(data)
+tree.display()
