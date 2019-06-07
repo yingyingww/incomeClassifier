@@ -1,5 +1,5 @@
-from load_data import load_data
-from load_data import extract_features
+from load_data import load_data, extract_features, get_labels
+
 import decision_tree as dt
 import perceptron
 
@@ -19,11 +19,6 @@ def parse_args():
     parser = argparse.ArgumentParser()
     return parser.parse_args()
 
-
-
-
-def get_labels(data):
-    return np.array([item['class'] for item in data])
 
 
 def compute_metrics(classifier, test_data, params):
@@ -79,6 +74,9 @@ def main():
 
     lr_pred = lr_model.predict(X_test)
 
+    weights = perceptron.perceptron(X_train, y_train, 10)
+    perceptron_pred=perceptron.perceptron_test(X_test,weights)
+
 
     print('Baseline:')
     print('Accuracy: ' + str(baseline_metrics[0]))
@@ -97,7 +95,12 @@ def main():
     print('Precision: ' + str(precision_score(y_test, lr_pred)))
     print('Recall: ' + str(recall_score(y_test, lr_pred)))
     print('F1 Score: ' + str(f1_score(y_test, lr_pred)))
-    
+
+    print('\nPerceptron Regression:')
+    print('Accuracy: ' + str([y_test[i] == perceptron_pred[i] for i in range(len(y_test))].count(True) / len(test_data)))
+    print('Precision: ' + str(precision_score(y_test, perceptron_pred)))
+    print('Recall: ' + str(recall_score(y_test, perceptron_pred)))
+    print('F1 Score: ' + str(f1_score(y_test, perceptron_pred)))
 
 
 if __name__ == "__main__":

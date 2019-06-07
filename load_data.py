@@ -1,6 +1,6 @@
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.preprocessing import StandardScaler
-
+import numpy as np
 
 def load_data(file_name, convert_strings=True):
     output_data = []
@@ -54,3 +54,8 @@ def extract_features(data, test_data):
     scaler = StandardScaler()
     scaled_X = scaler.fit_transform(X_combined)
     return scaled_X[0:len(data)], scaled_X[len(data):]
+
+
+
+def get_labels(data):
+    return np.array([item['class'] for item in data])
