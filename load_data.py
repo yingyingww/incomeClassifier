@@ -1,5 +1,5 @@
 
-def load_data(file_name, remove_unk=False):
+def load_data(file_name, convert_strings=True):
     output_data = []
     input_data = open(file_name, 'r')
     for line in input_data:
@@ -16,7 +16,26 @@ def load_data(file_name, remove_unk=False):
                             'hours-per-week': line_data[12], 'native-country': line_data[13],
                             'class': 0 if line_data[14] == '<=50K' or line_data[14] == '<=50K.' else 1})
 
-        if remove_unk and '?' in [output_data[len(output_data) - 1][attribute] for attribute in output_data[0]]:
-            output_data = output_data[:-1]
     input_data.close()
+    if convert_strings:
+        convert_strings_to_integers(output_data)
     return output_data
+
+
+def convert_strings_to_integers(data):
+    for item in data:
+        for attribute in item:
+            if represents_integer(item[attribute]):
+                item[attribute] = int(item[attribute])
+
+
+def represents_integer(s):
+    """Return true if the string s is an integer, false otherwise.
+    
+    This is used for determining if an attribute is categorical or continuous.
+    """
+    try:
+        int(s)
+        return True
+    except ValueError:
+        return False

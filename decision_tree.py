@@ -1,18 +1,8 @@
-from load_data import load_data
+from load_data import represents_integer
 from collections import defaultdict
 import math
 
 
-def represents_integer(s):
-    """Return true if the string s is an integer, false otherwise.
-    
-    This is used for determining if an attribute is categorical or continuous.
-    """
-    try:
-        int(s)
-        return True
-    except ValueError:
-        return False
 
 
 def find_baseline_attribute(data):
