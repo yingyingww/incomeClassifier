@@ -1,4 +1,5 @@
 from load_data import load_data
+from load_data import extract_features
 import decision_tree as dt
 import perceptron
 
@@ -8,12 +9,10 @@ import numpy as np
 from sklearn.metrics import precision_score
 from sklearn.metrics import recall_score
 from sklearn.metrics import f1_score
-from sklearn.feature_extraction import DictVectorizer
-from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LogisticRegression
 
 import warnings
-warnings.filterwarnings('ignore')
+# warnings.filterwarnings('ignore')
 
 
 def parse_args():
@@ -21,10 +20,6 @@ def parse_args():
     return parser.parse_args()
 
 
-def extract_features(data, test_data):
-    v = DictVectorizer()
-    X_combined = v.fit_transform(data + test_data).toarray()
-    return X_combined[0:len(data)], X_combined[len(data):]
 
 
 def get_labels(data):
@@ -56,7 +51,7 @@ def compute_metrics(classifier, test_data, params):
 
 
 def build_lr_model(X, y):
-    return LogisticRegression().fit(X, y)
+    return LogisticRegression(solver='sag').fit(X, y)
 
 
 def main():
@@ -68,12 +63,15 @@ def main():
     print('Decision tree built in ' + str(time.time() - dt_start) + ' s.')
 
     test_data = load_data('data/adult.test')
+    baseline_metrics = compute_metrics(dt.decision_tree_classify, test_data, [baseline_tree])
+    dt_metrics = compute_metrics(dt.decision_tree_classify, test_data, [tree])
     
+    y_train = get_labels(data)
+    y_test = get_labels(test_data)
+
     features = extract_features(data, test_data)
     X_train = features[0]
     X_test = features[1]
-    y_train = get_labels(data)
-    y_test = get_labels(test_data)
     print('Building logistic regression model...')
     lr_start = time.time()
     lr_model = build_lr_model(X_train, y_train)
@@ -81,8 +79,6 @@ def main():
 
     lr_pred = lr_model.predict(X_test)
 
-    baseline_metrics = compute_metrics(dt.decision_tree_classify, test_data, [baseline_tree])
-    dt_metrics = compute_metrics(dt.decision_tree_classify, test_data, [tree])
 
     print('Baseline:')
     print('Accuracy: ' + str(baseline_metrics[0]))

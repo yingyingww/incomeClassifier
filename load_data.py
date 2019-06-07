@@ -1,3 +1,6 @@
+from sklearn.feature_extraction import DictVectorizer
+from sklearn.preprocessing import StandardScaler
+
 
 def load_data(file_name, convert_strings=True):
     output_data = []
@@ -39,3 +42,15 @@ def represents_integer(s):
         return True
     except ValueError:
         return False
+
+
+def extract_features(data, test_data):
+    for item in data:
+        item.pop('class', None)
+    for item in test_data:
+        item.pop('class', None)
+    v = DictVectorizer()
+    X_combined = v.fit_transform(data + test_data).toarray()
+    scaler = StandardScaler()
+    scaled_X = scaler.fit_transform(X_combined)
+    return scaled_X[0:len(data)], scaled_X[len(data):]
