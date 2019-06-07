@@ -1,5 +1,5 @@
 
-def load_data(file_name):
+def load_data(file_name, remove_unk=False):
     output_data = []
     input_data = open(file_name, 'r')
     for line in input_data:
@@ -14,7 +14,9 @@ def load_data(file_name):
                             'race': line_data[8], 'sex': line_data[9],
                             'capital-gain': line_data[10], 'capital-loss': line_data[11],
                             'hours-per-week': line_data[12], 'native-country': line_data[13],
-                            'class': 0 if line_data[14] == '<=50K' else 1})
+                            'class': 0 if line_data[14] == '<=50K' or line_data[14] == '<=50K.' else 1})
 
+        if remove_unk and '?' in [output_data[len(output_data) - 1][attribute] for attribute in output_data[0]]:
+            output_data = output_data[:-1]
     input_data.close()
     return output_data

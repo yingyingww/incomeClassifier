@@ -55,6 +55,16 @@ def find_baseline_attribute(data):
     return best_attribute, labels
 
 
+def baseline_classify(item, attribute, labels, threshold=None):
+    item_category = item[attribute]
+    if threshold is not None:
+        if int(item[attribute]) < threshold:
+            return labels['below']
+        return labels['above']
+
+    return labels[item_category]
+
+
 class Node:
     """The class which represents the decision tree.
 
@@ -62,45 +72,80 @@ class Node:
     attribute -- The attribute on which this nodes splits.
     children -- The children of this node.
     label -- The label we should give any data point at this node, assuming the data point
-        is not 
+             is not passed on to a child of the current node.
+    category -- The subcategory that this node belongs to based on the attribute of its parent.
+    threshold -- If the node's attribute is continuous, the value it splits on.
+
 
     """
-    def __init__(self, category=None, label=0):
+    def __init__(self, category=None, label=-1):
         self.attribute = None
         self.children = []
         self.label = label
         self.category = category
+        self.threshold = None
 
-    def display(self, level=0):
-        print('\t' * level + repr(self.attribute))
-        if level > 1:
+    def display(self, max_level=3, level=0):
+        """Simple method which prints the contents of the decision tree up to max_level
+        """
+        print('\t' * level + repr((self.attribute, self.category, self.label)))
+        if level > max_level:
             return
         for child in self.children:
             child.display(level + 1)
 
 
-def decision_tree_classify(item, root):
-    pass
+def decision_tree_classify(item, node):
+    """Classifies data according to a decision tree.
+        
+    Arguments:
+    item --- A dictionary corresponding to a data point.
+    node --- A decision tree.
+    """
+
+    
+    if len(node.children) == 0:
+        return node.label
+    category = item[node.attribute]
+    if not represents_integer(category):
+        for child in node.children:
+            if child.category == category:
+                return decision_tree_classify(item, child)
+    else:
+        if int(category) < node.threshold:
+            return decision_tree_classify(item, node.children[0])
+        return decision_tree_classify(item, node.children[1])
+
+    return decision_tree_classify(item, node.children[0])
 
 
-def build_decision_tree(data):
+def build_decision_tree(data, max_depth=None):
+    """Creates a decision tree recursively based on training data. Continuous attributes
+    are only split on one time at most.
+
+    Arguments:
+    data --- A list of dictionaries as outputted by load_data in load_data.py.
+    max_depth --- The maximum depth of the decision tree.
+    """
     root = Node()
     attributes = [attribute for attribute in data[0]]
     attributes.remove('fnlwgt')
     attributes.remove('class')
-    _build_decision_tree(data, root, attributes)
+    _build_decision_tree(data, root, attributes, max_depth)
     return root
 
 
-def _build_decision_tree(data, node, attributes):
+def _build_decision_tree(data, node, attributes, max_depth=None, depth=0):
+    """Recursive helper method for the build_decision_tree function
+    """
+    depth += 1
     data_classes = [data_point['class'] for data_point in data]
-    if len(attributes) == 0:
-        node.label = majority_label(data)
-        return
-    if len(data_classes) == len(set(data_classes)):
-        node.label = data[0]['class']
+    node.label = majority_label(data)
+    if len(attributes) == 0 or len(data_classes) == len(set(data_classes)):
         return
     #  if examples have exactly the same attributes, stop recursing
+    if max_depth is not None and depth > max_depth:
+        return
 
     max_information_gain = -1
     best_attribute = None
@@ -122,6 +167,7 @@ def _build_decision_tree(data, node, attributes):
     else:
         subsets = split_on_attribute(data, best_attribute)
     node.attribute = best_attribute
+    node.threshold = best_threshold
 
     for subset in subsets:
         new_node = Node(category=subset[1])
@@ -131,10 +177,20 @@ def _build_decision_tree(data, node, attributes):
         else:
             new_attributes = list(attributes)
             new_attributes.remove(best_attribute)
-            _build_decision_tree(subset[0], new_node, new_attributes)
+            _build_decision_tree(subset[0], new_node, new_attributes, max_depth, depth)
 
 
 def split_on_attribute(data, attribute, threshold=None):
+    """Helper function for build_decision_tree which splits data based on a given attribute.
+
+    Arguments:
+    data --- A list of dictionaries as output by load_data in load_data.py.
+    attribute --- The attribute to split the data on.
+    threshold --- The threshold to split the data on if the attribute is continuous.
+
+    Returns --- A tuple (subset, category) where category is a subcategory of the given attribute
+                and subset is the subset of the data which correspond to that subcategory.
+    """
     if threshold is not None:
         return split_on_attribute_threshold(data, attribute, threshold)
 
@@ -146,6 +202,9 @@ def split_on_attribute(data, attribute, threshold=None):
 
 
 def split_on_attribute_threshold(data, attribute, threshold):
+    """Helper function for split_on_attribute which handles continuous attributes.
+    """
+
     data_categories = {'below': [], 'above': []}
 
     for data_point in data:
@@ -158,6 +217,8 @@ def split_on_attribute_threshold(data, attribute, threshold):
 
 
 def majority_label(data):
+    """Returns the majority label (income class) associated with the given data.
+    """
     counts_positive = 0
     counts_negative = 0
     for data_point in data:
@@ -170,6 +231,18 @@ def majority_label(data):
 
 
 def get_counts(data, attribute, threshold=None):
+    """Gets the counts of each class for each subcategory of an attribute.
+
+    Arguments:
+    data --- A list of dictionaries as output by load_data in load_data.py.
+    attribute --- The attribute to separate the counts on.
+    threshold --- If the attribute is continuous, the threshold to separate the data on.
+
+    Returns: A dictionary with entries {category: (y_1, y_2)} where category is a category
+    based on the attribute and y_1, y_2 are the number of data points in the data which have
+    income classes <=50K and >50K, respectively. If the attribute is continuous, the categories
+    are 'below' and 'above', corresponding to below and above the threshold value.
+    """
     if threshold is not None:
         return get_counts_threshold(data, attribute, threshold)
     counts = defaultdict(lambda: [0, 0])
@@ -185,7 +258,9 @@ def get_counts(data, attribute, threshold=None):
 
 
 def get_counts_threshold(data, attribute, threshold):
-    counts = defaultdict(lambda: [0, 0])
+    """Helper function for get_counts which handles continuous attributes.
+    """
+    counts = {'below': [0, 0], 'above': [0, 0]}
     for item in data:
         if item['class'] == 0 and int(item[attribute]) < threshold:
             counts['below'][0] += 1
@@ -199,6 +274,15 @@ def get_counts_threshold(data, attribute, threshold):
 
 
 def find_threshold(data, attribute):
+    """Finds the threshold which maximizes the information gain for the given attribute.
+    This is done by testing all possible thresholds which do not lie between two points which
+    share the same class. 
+
+    Arguments:
+
+    data --- A list of dictionaries as output by load_data.
+    attribute --- The continuous attribute for which the optimal threshold is found.
+    """
     sorted_data = sorted(data, key=lambda i: i[attribute])
     previous_class = -1
     max_info_gain = 0
@@ -220,7 +304,15 @@ def find_threshold(data, attribute):
     return int(best_threshold)
 
 
-def get_information_gain(data, attribute, threshold=None, data_sorted=True):
+def get_information_gain(data, attribute, threshold=None):
+    """Finds the information gain of a particular attribute.
+
+    Arguments:
+
+    data --- A list of dictionaries as output by load_data.
+    attribute --- The attribute for which the information gain is calculated.
+    threshold --- If the attribute is continuous, the threshold on which to split.
+    """
     counts = get_counts(data, attribute, threshold)
     total_0 = 0
     total_1 = 0
@@ -247,8 +339,10 @@ def get_information_gain(data, attribute, threshold=None, data_sorted=True):
     return entropy - conditional_entropy
 
 
-
 def get_information_gain_threshold(sorted_data, attribute, threshold):
+    """Helper method for find_threshold which calculates the information gain of a given
+    threshold for the purpose of finding the optimal threshold.
+    """
     counts_bt = [0, 0]  # bt = below threshold, at = above threshold
     counts_at = [0, 0]
     current_index = 0
@@ -296,7 +390,28 @@ def parse_args():
     return parser.parse_args()
 
 
-data = load_data('data/adult.data')
-print(get_counts(data, 'education'))
-tree = build_decision_tree(data)
-tree.display()
+def main():
+    data = load_data('data/adult.data')
+    tree = build_decision_tree(data)
+    baseline_tree = build_decision_tree(data, max_depth=1)
+    test_data = load_data('data/adult.test')
+    dt_correct = 0
+    baseline_correct = 0
+
+    class_1 = 0
+    for item in test_data:
+        if item['class'] == 1:
+            class_1 += 1
+        if decision_tree_classify(item, tree) == item['class']:
+            dt_correct += 1
+
+    for item in test_data:
+        if decision_tree_classify(item, baseline_tree) == item['class']:
+            baseline_correct += 1
+
+    print('Baseline Accuracy: ' + str(baseline_correct / len(test_data)))
+    print('Decision Tree Accuracy: ' + str(dt_correct / len(test_data)))
+
+
+if __name__ == "__main__":
+    main()
