@@ -77,11 +77,11 @@ class Node:
     def display(self, max_level=3, level=0):
         """Simple method which prints the contents of the decision tree up to max_level
         """
-        print('\t' * level + repr((self.attribute, self.category, self.label)))
+        print('\t' * level + repr((self.attribute, self.category, self.threshold)))
         if level > max_level:
             return
         for child in self.children:
-            child.display(level + 1)
+            child.display(max_level, level + 1)
 
 
 def decision_tree_classify(item, node):
@@ -92,7 +92,6 @@ def decision_tree_classify(item, node):
     node --- A decision tree.
     """
 
-    
     if len(node.children) == 0:
         return node.label
     category = item[node.attribute]
