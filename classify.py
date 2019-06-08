@@ -20,7 +20,6 @@ def parse_args():
     return parser.parse_args()
 
 
-
 def compute_metrics(classifier, test_data, params):
     """Computes accuracy, precision, recall, and f1-score for the given classifier.
 
@@ -75,8 +74,7 @@ def main():
     lr_pred = lr_model.predict(X_test)
 
     weights = perceptron.perceptron(X_train, y_train, 10)
-    perceptron_pred=perceptron.perceptron_test(X_test,weights)
-
+    perceptron_pred = perceptron.perceptron_test(X_test, weights)
 
     print('Baseline:')
     print('Accuracy: ' + str(baseline_metrics[0]))
@@ -90,17 +88,18 @@ def main():
     print('Recall: ' + str(dt_metrics[2]))
     print('F1 Score: ' + str(dt_metrics[3]))
 
+    print('\nPerceptron:')
+    print('Accuracy: ' + str([y_test[i] == perceptron_pred[i] for i in range(len(y_test))].count(True) / len(test_data)))
+    print('Precision: ' + str(precision_score(y_test, perceptron_pred)))
+    print('Recall: ' + str(recall_score(y_test, perceptron_pred)))
+    print('F1 Score: ' + str(f1_score(y_test, perceptron_pred)))
+
     print('\nLogistic Regression:')
     print('Accuracy: ' + str([y_test[i] == lr_pred[i] for i in range(len(y_test))].count(True) / len(test_data)))
     print('Precision: ' + str(precision_score(y_test, lr_pred)))
     print('Recall: ' + str(recall_score(y_test, lr_pred)))
     print('F1 Score: ' + str(f1_score(y_test, lr_pred)))
 
-    print('\nPerceptron Regression:')
-    print('Accuracy: ' + str([y_test[i] == perceptron_pred[i] for i in range(len(y_test))].count(True) / len(test_data)))
-    print('Precision: ' + str(precision_score(y_test, perceptron_pred)))
-    print('Recall: ' + str(recall_score(y_test, perceptron_pred)))
-    print('F1 Score: ' + str(f1_score(y_test, perceptron_pred)))
 
 
 if __name__ == "__main__":
