@@ -326,6 +326,11 @@ def get_information_gain_threshold(sorted_data, attribute, threshold):
 
 
 def tune_max_depth(training_data, val_data):
+    """Gets the f_scores for decision trees with different maximum depths on the validation data.
+
+    Arguments:
+    training_data, val_data --- The training and validation data sets.
+    """
     depths, scores = [], []
     y_true = get_labels(val_data)
     for x in range(2, 14):
@@ -337,59 +342,50 @@ def tune_max_depth(training_data, val_data):
     return depths, scores
 
 
-
 def reduced_error_prune(root, val_data):
-    improving = True
+    """Prunes nodes from a decision tree through reduced error pruning. Iterates through nodes
+    and removes nodes which, when removed, cause the decision tree classifier to perform better
+    on the validation data. Performance on validation data is compared using f1-score.
+
+    Arguments:
+    root --- The root node of the decision tree.
+    val_data --- The validation data set.
+    """
     y_true = get_labels(val_data)
+    y_pred = [decision_tree_classify(item, root) for item in val_data]
+    base_score = f1_score(y_true, y_pred)
+    _reduced_error_prune(root, root, base_score, val_data, y_true)
     
-    while improving:
-        improving = False
-        y_pred = [decision_tree_classify(item, root) for item in val_data]
 
-        base_score = f1_score(y_true, y_pred)
-        print(base_score)
-        leaves = get_leaves(root)
-        print(len(leaves))
-
-        counter = 0
-        for leaf in leaves:
-            if leaf.tested:
-                continue
-
-            counter += 1
-            if counter % 100 == 0:
-                print(counter)
-            parent = leaf.parent
-            remove_leaf(leaf)
-            y_pred = [decision_tree_classify(item, root) for item in val_data]
-            new_score = f1_score(y_true, y_pred)
-            if new_score > base_score:
-                base_score = new_score
-                print(new_score)
-                improving = True
-            else:
-                parent.children.append(leaf)
-                leaf.tested = True
-
-
-def get_leaves(root):
-    leaves = []
-    _get_leaves(root, leaves)
-    return leaves
-
-
-def _get_leaves(node, leaves):
-    if len(node.children) == 0:
-        leaves.append(node)
-        return
+def _reduced_error_prune(root, node, score, val_data, val_labels):
+    """Recursive helper function for reduced error pruning.
+    """
 
     for child in node.children:
-        _get_leaves(child, leaves)
+        score = _reduced_error_prune(root, child, score, val_data, val_labels)
+
+    if node == root:
+        return score
+
+    parent = node.parent
+    remove_node(node)
+    y_pred = [decision_tree_classify(item, root) for item in val_data]
+    new_score = f1_score(val_labels, y_pred)
+    if new_score > score:
+        score = new_score
+        print('Current F1-score: ' + str(new_score) + ' Continuing pruning...')
+    else:
+        parent.children.append(node)
+
+    return score
 
 
-def remove_leaf(node):
-    if len(node.children) != 0:
+def remove_node(node):
+    """
+    Helper function which removes a node (and its children) from the decision tree.
+    Returns True if the node is successfully removed (parent is not None) and False otherwise.
+    """
+    if node.parent is None:
         return False
-
     node.parent.children.remove(node)
     return True

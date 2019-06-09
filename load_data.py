@@ -4,6 +4,8 @@ import numpy as np
 
 
 def load_data(file_name, convert_strings=True):
+    """Loads census data from the file.
+    """
     output_data = []
     input_data = open(file_name, 'r')
     for line in input_data:
@@ -27,6 +29,10 @@ def load_data(file_name, convert_strings=True):
 
 
 def convert_strings_to_integers(data):
+    """
+    Converts strings representing integers (values corresponding to continuous attributes) to 
+    integers.
+    """
     for item in data:
         for attribute in item:
             if represents_integer(item[attribute]):
@@ -46,6 +52,20 @@ def represents_integer(s):
 
 
 def extract_features(data, test_data):
+    """Extracts feature vectors from training and test data. Feature vectors for training and 
+    test data are created simultaneously to ensure that feature vectors are the same length 
+    (there are features present in training but not test data and vice versa). Feature vector
+    values are scaled according to their z-score.
+
+    Arguments:
+    data, test_data --- The training and test data.
+
+    Returns:
+    (X_train, X_test, feature_names) where X_train is the feature matrix for the training data, 
+    X_test is the feature matrix for the test data, and feature_names is the list of feature
+    names corresponding to the features in the feature matrices.
+    
+    """
     for item in data:
         item.pop('class', None)
     for item in test_data:

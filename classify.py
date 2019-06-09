@@ -21,6 +21,9 @@ def parse_args():
     parser.add_argument('--rep', action='store_true', help='Conduct reduced error pruning on the decision tree. It\'s recommended to supply a maximum depth parameter when conducting rpe pruning as this algorithm can take a long time to run otherwise.')
     parser.add_argument('--depth', type=int, help='The maximum depth of the decision tree.')
     parser.add_argument('--plot', action='store_true', help='Plot the accuracy, precision, recall, and f1-score of the classifiers run.')
+    parser.add_argument('--lr_top', type=int, help='Get the n largest positively weighted features from the logistic regression model.')
+    parser.add_argument('--lr_bot', type=int, help='Get the n largest negatively weighted features from the logistic regression model.')
+    parser.add_argument('--baseline_attribute', default='education', help='Specify an attribute for the baseline (default is education)')
     parser.add_argument('--depth_plot', action='store_true', help='Plot maximum depth vs. f-score (for decision tree) and exit')
     return parser.parse_args()
 
@@ -49,15 +52,24 @@ def compute_metrics(classifier, test_data, params):
     return correct / len(test_data), precision_score(y_true, y_pred), recall_score(y_true, y_pred), f1_score(y_true, y_pred)
 
 
-def build_lr_model(X, y, C):
-    return LogisticRegression(solver='sag', C=C).fit(X, y)
-
-
 def tune_lr_model(model, val_X, val_y):
     pass
 
 
 def get_lr_top_weights(model, num_features, feature_names):
+    """Gets the features with the highest weights (positive and negative) from a logistic regression model.
+
+    Arguments:
+    model --- The logistic regression model.
+    num_features --- The number of features to return.
+    feature_names --- The names associated with the feature vectors originally passed to the
+    logistic regression model.
+
+    Returns:
+    (best, worst) --- Where best is a list of the num_features features with the highest positive
+    weights in the logistic regression model, and worst a list of the num_features features
+    with the largest negative weights in the model.
+    """
     weights = np.array(model.coef_[0])
     best_indices = np.argpartition(weights, -num_features)[-num_features:]
     worst_indices = np.argpartition(weights, -num_features)[0:num_features]
@@ -65,11 +77,19 @@ def get_lr_top_weights(model, num_features, feature_names):
 
 
 def plot_metrics(metrics_baseline, metrics_dt, metrics_perceptron, metrics_lr, metrics_dtre=None):
-    n_groups = 4
+    """Creates a bar chart to display the accuracy, precision, recall, and f1-score of the 
+    classifiers.
 
-    fig, ax = plt.subplots()
+    Arguments:
+    (accuracy, precision, recall, f1-score) tuples corresponding to the baseline, decision-tree,
+    perceptron, logistic regression, and optionally decision tree w/ reduced error pruning 
+    classifiers.
+    """
+    n_groups = 4 if metrics_dtre is not None else 5
+
+    plt.subplots()
     index = np.arange(n_groups)
-    bar_width = 0.2
+    bar_width = 0.15
     opacity = 0.8
 
     plt.bar(index, metrics_baseline, bar_width, alpha=opacity, color='b', label='Baseline')
@@ -77,7 +97,7 @@ def plot_metrics(metrics_baseline, metrics_dt, metrics_perceptron, metrics_lr, m
     plt.bar(index + 2 * bar_width, metrics_perceptron, bar_width, alpha=opacity, color='r', label='Perceptron')
     plt.bar(index + 3 * bar_width, metrics_lr, bar_width, alpha=opacity, color='y', label='Logistic Regression')
     if metrics_dtre is not None:
-        plt.bar(index + 4 * bar_width, metrics_dtre, bar_width, alpha=opacity, color='v', label='Decision Tree (Reduced Error Pruning)')
+        plt.bar(index + 4 * bar_width, metrics_dtre, bar_width, alpha=opacity, color='c', label='Decision Tree (Reduced Error Pruning)')
 
     plt.title('Metrics by classifier')
     plt.xticks(index + bar_width, ('Accuracy', 'Precision', 'Recall', 'F1-score'))
@@ -103,8 +123,7 @@ def main():
         plt.show()
         quit()
 
-    baseline_tree = dt.build_decision_tree(data, max_depth=1, forced_attribute='education')
-    baseline_tree.display()
+    baseline_tree = dt.build_decision_tree(data, max_depth=1, forced_attribute=args.baseline_attribute)
     print('Building decision tree...')
     dt_start = time.time()
     if args.depth is not None:
@@ -133,9 +152,14 @@ def main():
     feature_names = features[2]
     print('Building logistic regression model...')
     lr_start = time.time()
-    lr_model = build_lr_model(X_train, y_train, 1)
+    lr_model = LogisticRegression(solver='sag').fit(X_train, y_train)
+
     print('Logistic regression model built in ' + str(time.time() - lr_start) + ' s.')
-    print(get_lr_top_weights(lr_model, 5, feature_names))
+
+    if args.lr_top is not None:
+        print('Top weighted features in logistic regression model: ' + str(get_lr_top_weights(lr_model, args.lr_top, feature_names)[0]))
+    if args.lr_bot is not None:
+        print('Top negatively weighted features in logistic regression model: ' + str(get_lr_top_weights(lr_model, args.lr_bot, feature_names)[1]))
 
     lr_pred = lr_model.predict(X_test)
 
