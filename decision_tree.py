@@ -1,7 +1,9 @@
 from load_data import represents_integer
 from collections import defaultdict
 import math
-
+from sklearn.feature_selection import SelectKBest
+from sklearn.feature_selection import chi2
+import scipy.stats as stats
 
 
 
@@ -73,11 +75,21 @@ class Node:
         self.label = label
         self.category = category
         self.threshold = None
+        self.parent =None
+        self.actualPos = 0
+        self.actualNeg = 0
 
     def display(self, max_level=3, level=0):
         """Simple method which prints the contents of the decision tree up to max_level
         """
-        print('\t' * level + repr((self.attribute, self.category, self.threshold)))
+        if self.parent is not None:
+            #print('\t' * level + repr((self.parent.attribute, self.attribute, self.category, self.threshold)))
+            print('\t' * level + repr((self.parent.attribute, self.category, self.attribute,self.label,self.actualPos,self.actualNeg)))
+
+        else:
+            #print('\t' * level + repr((self.attribute, self.category, self.threshold)))
+            print('\t' * level + repr((self.category,self.attribute,self.label,self.actualPos,self.actualNeg)))
+
         if level > max_level:
             return
         for child in self.children:
@@ -158,7 +170,21 @@ def _build_decision_tree(data, node, attributes, max_depth=None, depth=0):
     node.threshold = best_threshold
 
     for subset in subsets:
+        pos_label_num=0
+        neg_label_num=0
+
+        for item in subset[0]:
+            if item['class']==1:
+                pos_label_num +=1
+            else:
+                neg_label_num +=1
+
         new_node = Node(category=subset[1])
+        new_node.actualPos = pos_label_num
+        new_node.actualNeg = neg_label_num
+
+        #new_node.num = len(category)
+        new_node.parent = node
         node.children.append(new_node)
         if len(subset[0]) == 0:
             new_node.label = majority_label(data)
@@ -166,6 +192,66 @@ def _build_decision_tree(data, node, attributes, max_depth=None, depth=0):
             new_attributes = list(attributes)
             new_attributes.remove(best_attribute)
             _build_decision_tree(subset[0], new_node, new_attributes, max_depth, depth)
+        # print("subset is:", subset)
+        # print("subset len is: ", len(subset[0]))
+        # print("this node is", node.attribute, new_node.category, new_node.attribute)
+        # print('actual pos', new_node.actualPos)
+        # print('neg ', new_node.actualNeg)
+
+def decision_tree_pruning(tree):
+    '''
+
+    '''
+    pass
+
+
+def _decision_tree_pruning(node):
+    #find a list of nodes that only has leaf node as descendent
+    if node.children == 0:
+        return
+    test_nodes = []
+
+    for child in node.children:
+        if len(child.children) == 0:
+            test_nodes.append(child.parent)
+        else:
+            #recurse until find the test_nodes
+            _decision_tree_pruning(child)
+
+    for test_node in test_nodes:
+        #print("cur test nodes: ", test_node.parent.attribute, test_node.category, test_node.attribute)
+        observed = []
+        expected = []
+
+        for child in test_node.children:
+            observed.append(child.actualPos)
+            observed.append(child.actualNeg)
+
+            expectedPos = test_node.actualPos * (child.actualPos+child.actualNeg) / (test_node.actualPos + test_node.actualNeg)
+            expectedNeg = test_node.actualNeg * (child.actualPos+child.actualNeg) / (test_node.actualPos + test_node.actualNeg)
+
+            expected.append(expectedPos)
+            expected.append(expectedNeg)
+
+        #when the length of the arguments is 1, the p-value is nan
+        score, p =stats.chisquare(f_obs= observed, f_exp= expected)
+        #print(score,p)
+        degree_freedom= len(test_node.children) - 1
+        critical_value = stats.chi2.ppf(q=0.95, df=degree_freedom)
+        #print("crit ",critical_value)
+        if not math.isnan(score):
+            #if p > 0.05:
+            #     print("Yes")
+            #     test_node.children = []
+            if score < critical_value:
+                #print("trim")
+                test_node.children = []
+
+    #return node
+
+
+
+
 
 
 def split_on_attribute(data, attribute, threshold=None):

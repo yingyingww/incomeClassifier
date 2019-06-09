@@ -56,16 +56,25 @@ def main():
     tree = dt.build_decision_tree(data)
     print('Decision tree built in ' + str(time.time() - dt_start) + ' s.')
 
+    #Pruning
+    #comment out this line for unpruned tree
+    dt._decision_tree_pruning(tree)
+
+    val_data = load_data('data/adult.val')
     test_data = load_data('data/adult.test')
-    baseline_metrics = compute_metrics(dt.decision_tree_classify, test_data, [baseline_tree])
-    dt_metrics = compute_metrics(dt.decision_tree_classify, test_data, [tree])
-    
+
+    baseline_metrics = compute_metrics(dt.decision_tree_classify, val_data, [baseline_tree])
+    dt_metrics = compute_metrics(dt.decision_tree_classify, val_data, [tree])
+
+    #dt_metrics_pruned = compute_metrics(dt.decision_tree_classify, test_data, [pruned_tree])
+
     y_train = get_labels(data)
     y_test = get_labels(test_data)
 
     features = extract_features(data, test_data)
     X_train = features[0]
     X_test = features[1]
+    
     print('Building logistic regression model...')
     lr_start = time.time()
     lr_model = build_lr_model(X_train, y_train)
@@ -81,13 +90,14 @@ def main():
     print('Precision: ' + str(baseline_metrics[1]))
     print('Recall: ' + str(baseline_metrics[2]))
     print('F1 Score: ' + str(baseline_metrics[3]))
-    
+
     print('\nDecision Tree:')
     print('Accuracy: ' + str(dt_metrics[0]))
     print('Precision: ' + str(dt_metrics[1]))
     print('Recall: ' + str(dt_metrics[2]))
     print('F1 Score: ' + str(dt_metrics[3]))
 
+    '''
     print('\nPerceptron:')
     print('Accuracy: ' + str([y_test[i] == perceptron_pred[i] for i in range(len(y_test))].count(True) / len(test_data)))
     print('Precision: ' + str(precision_score(y_test, perceptron_pred)))
@@ -99,7 +109,7 @@ def main():
     print('Precision: ' + str(precision_score(y_test, lr_pred)))
     print('Recall: ' + str(recall_score(y_test, lr_pred)))
     print('F1 Score: ' + str(f1_score(y_test, lr_pred)))
-
+    '''
 
 
 if __name__ == "__main__":
