@@ -56,7 +56,7 @@ def extract_features(data, test_data):
     scaler = StandardScaler()
     scaled_X_train = scaler.fit_transform(X_train)
     scaled_X_test = scaler.fit_transform(X_test)
-    return scaled_X_train, scaled_X_test
+    return scaled_X_train, scaled_X_test, v.feature_names_
 
 
 def get_labels(data):

@@ -1,57 +1,8 @@
 from load_data import represents_integer
+from load_data import get_labels
 from collections import defaultdict
+from sklearn.metrics import f1_score
 import math
-
-
-
-
-def find_baseline_attribute(data):
-    """Finds the singular attribute of the data that has the most predictive power.
-    (ie. The attribute which allows us to predict the highest proportion of the training data.)
-    
-    Arguments:
-    data --- A list of dictionaries as returned by the function load_data in load_data.py.
-    """
-    best_ratio = 0
-    best_attribute = None
-    data_length = len(data)
-
-    for attribute in data[0]:
-        if attribute == 'fnlwgt':
-            continue
-        correct = 0
-        if represents_integer(data[0][attribute]):  # check if attribute is continuous
-            counts = get_counts(data, attribute, find_threshold(data, attribute))
-        else:
-            counts = get_counts(data, attribute)
-
-        for category in counts:
-            correct += counts[category][0] if counts[category][0] > counts[category][1] else counts[category][1]
-        
-        if correct / data_length > best_ratio:
-            best_attribute = attribute
-            best_ratio = correct / data_length
-
-    if represents_integer(data[0][best_attribute]):
-        counts = get_counts(data, best_attribute, find_threshold(data, attribute))
-    else:
-        counts = get_counts(data, best_attribute)
-
-    labels = {}
-    for category in counts:
-        labels[category] = 0 if counts[category][0] > counts[category][1] else 1
-
-    return best_attribute, labels
-
-
-def baseline_classify(item, attribute, labels, threshold=None):
-    item_category = item[attribute]
-    if threshold is not None:
-        if int(item[attribute]) < threshold:
-            return labels['below']
-        return labels['above']
-
-    return labels[item_category]
 
 
 class Node:
@@ -60,24 +11,31 @@ class Node:
     Instance Variables:
     attribute -- The attribute on which this nodes splits.
     children -- The children of this node.
+    parent -- The parent of this node.
     label -- The label we should give any data point at this node, assuming the data point
              is not passed on to a child of the current node.
     category -- The subcategory that this node belongs to based on the attribute of its parent.
     threshold -- If the node's attribute is continuous, the value it splits on.
+    tested -- This variable is used exclusively for reduced error pruning. Once we have determined
+    that this node should not be pruned, we set this flag to prevent the node from being tested 
+    multiple times. Storing this flag as an instance variable is the most efficient way to do 
+    determine if a node has already been tested.
 
 
     """
     def __init__(self, category=None, label=-1):
         self.attribute = None
         self.children = []
+        self.parent = None
         self.label = label
         self.category = category
         self.threshold = None
+        self.tested = False
 
     def display(self, max_level=3, level=0):
         """Simple method which prints the contents of the decision tree up to max_level
         """
-        print('\t' * level + repr((self.attribute, self.category, self.threshold)))
+        print('\t' * level + repr((self.attribute, self.category, self.label)))
         if level > max_level:
             return
         for child in self.children:
@@ -100,14 +58,15 @@ def decision_tree_classify(item, node):
             if child.category == category:
                 return decision_tree_classify(item, child)
     else:
-        if int(category) < node.threshold:
-            return decision_tree_classify(item, node.children[0])
-        return decision_tree_classify(item, node.children[1])
+        for child in node.children:
+            if int(category) < node.threshold and child.category == 'below':
+                return decision_tree_classify(item, child)
+            if int(category) >= node.threshold and child.category == 'above':
+                return decision_tree_classify(item, child)
 
-    return decision_tree_classify(item, node.children[0])
+    return node.label
 
-
-def build_decision_tree(data, max_depth=None):
+def build_decision_tree(data, max_depth=None, forced_attribute=None):
     """Creates a decision tree recursively based on training data. Continuous attributes
     are only split on one time at most.
 
@@ -119,11 +78,11 @@ def build_decision_tree(data, max_depth=None):
     attributes = [attribute for attribute in data[0]]
     attributes.remove('fnlwgt')
     attributes.remove('class')
-    _build_decision_tree(data, root, attributes, max_depth)
+    _build_decision_tree(data, root, attributes, max_depth, forced_attribute=forced_attribute)
     return root
 
 
-def _build_decision_tree(data, node, attributes, max_depth=None, depth=0):
+def _build_decision_tree(data, node, attributes, max_depth=None, depth=0, forced_attribute=None):
     """Recursive helper method for the build_decision_tree function
     """
     depth += 1
@@ -150,15 +109,20 @@ def _build_decision_tree(data, node, attributes, max_depth=None, depth=0):
             best_attribute = attribute
             best_threshold = threshold
 
+    if forced_attribute is not None:
+        best_attribute = forced_attribute
+
     if represents_integer(data[0][best_attribute]):
         subsets = split_on_attribute(data, best_attribute, best_threshold)
     else:
         subsets = split_on_attribute(data, best_attribute)
+
     node.attribute = best_attribute
     node.threshold = best_threshold
 
     for subset in subsets:
         new_node = Node(category=subset[1])
+        new_node.parent = node
         node.children.append(new_node)
         if len(subset[0]) == 0:
             new_node.label = majority_label(data)
@@ -359,3 +323,73 @@ def get_information_gain_threshold(sorted_data, attribute, threshold):
     conditional_at = (counts_at[0] / total_at) * math.log((counts_at[0] / total_at), 2) + (counts_at[1] / total_at) * math.log((counts_at[1] / total_at), 2)
 
     return probability_bt * -conditional_bt + probability_at * -conditional_at
+
+
+def tune_max_depth(training_data, val_data):
+    depths, scores = [], []
+    y_true = get_labels(val_data)
+    for x in range(2, 14):
+        root = build_decision_tree(training_data, x)
+        y_pred = [decision_tree_classify(item, root) for item in val_data]
+        depths.append(x)
+        scores.append(f1_score(y_true, y_pred))
+
+    return depths, scores
+
+
+
+def reduced_error_prune(root, val_data):
+    improving = True
+    y_true = get_labels(val_data)
+    
+    while improving:
+        improving = False
+        y_pred = [decision_tree_classify(item, root) for item in val_data]
+
+        base_score = f1_score(y_true, y_pred)
+        print(base_score)
+        leaves = get_leaves(root)
+        print(len(leaves))
+
+        counter = 0
+        for leaf in leaves:
+            if leaf.tested:
+                continue
+
+            counter += 1
+            if counter % 100 == 0:
+                print(counter)
+            parent = leaf.parent
+            remove_leaf(leaf)
+            y_pred = [decision_tree_classify(item, root) for item in val_data]
+            new_score = f1_score(y_true, y_pred)
+            if new_score > base_score:
+                base_score = new_score
+                print(new_score)
+                improving = True
+            else:
+                parent.children.append(leaf)
+                leaf.tested = True
+
+
+def get_leaves(root):
+    leaves = []
+    _get_leaves(root, leaves)
+    return leaves
+
+
+def _get_leaves(node, leaves):
+    if len(node.children) == 0:
+        leaves.append(node)
+        return
+
+    for child in node.children:
+        _get_leaves(child, leaves)
+
+
+def remove_leaf(node):
+    if len(node.children) != 0:
+        return False
+
+    node.parent.children.remove(node)
+    return True
