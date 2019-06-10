@@ -3,7 +3,7 @@ from load_data import get_labels
 from collections import defaultdict
 from sklearn.metrics import f1_score
 import math
-from scipy.stats import chi2
+import scipy.stats as stats
 
 
 class Node:
@@ -26,6 +26,8 @@ class Node:
         self.label = label
         self.category = category
         self.threshold = None
+        self.actual_pos = 0
+        self.actual_neg = 0
 
     def display(self, max_level=3, level=0):
         """Simple method which prints the contents of the decision tree up to max_level
@@ -71,6 +73,12 @@ def build_decision_tree(data, max_depth=None, forced_attribute=None):
     max_depth --- The maximum depth of the decision tree.
     """
     root = Node()
+    for item in data:
+        if item['class'] == 0:
+            root.actual_neg += 1
+        if item['class'] == 1:
+            root.actual_pos += 1
+
     attributes = [attribute for attribute in data[0]]
     attributes.remove('fnlwgt')
     attributes.remove('class')
@@ -84,7 +92,7 @@ def _build_decision_tree(data, node, attributes, max_depth=None, depth=0, forced
     depth += 1
     data_classes = [data_point['class'] for data_point in data]
     node.label = majority_label(data)
-    if len(attributes) == 0 or len(data_classes) == len(set(data_classes)):
+    if len(attributes) == 0 or len(set(data_classes)) == 1:
         return
     #  if examples have exactly the same attributes, stop recursing
     if max_depth is not None and depth > max_depth:
@@ -117,7 +125,18 @@ def _build_decision_tree(data, node, attributes, max_depth=None, depth=0, forced
     node.threshold = best_threshold
 
     for subset in subsets:
+        pos_label_num = 0
+        neg_label_num = 0
+
+        for item in subset[0]:
+            if item['class'] == 1:
+                pos_label_num += 1
+            else:
+                neg_label_num += 1
         new_node = Node(category=subset[1])
+        new_node.actual_pos = pos_label_num
+        new_node.actual_neg = neg_label_num
+
         new_node.parent = node
         node.children.append(new_node)
         if len(subset[0]) == 0:
@@ -374,75 +393,6 @@ def _reduced_error_prune(root, node, score, val_data, val_labels):
         parent.children.append(node)
 
     return score
-"""
-
-def chi_square_prune(node, data):
-
-    if len(node.children) == 0:
-        return
-
-    subsets, pos_neg = split_data_and_get_counts(data, node.attribute, node.threshold)
-
-    for child in node.children:
-        chi_square_prune(child, subsets[child.category])
-
-    p = len([item for item in data if item['class'] == 1])
-    n = len(data) - p
-    delta = 0
-    # conduct chi square test 
-    for child in node.children:
-        p_k = pos_neg[child.category][0]
-        n_k = pos_neg[child.category][1]  
-        p_expected = p * (p_k + n_k) / (p + n)
-        n_expected = n * (p_k + n_k) / (p + n)
-        if n_expected == 0 or p_expected == 0:
-            delta = 0
-        else:
-            delta += math.pow((p_k - p_expected), 2) / p_expected + math.pow((n_k - n_expected), 2) / n_expected
-
-        if 1 - chi2.cdf(delta, len(data) - 1) > 0.05:  # Accept null hypothesis
-            remove_node(child)
-            print('pruned')
-
-
-def split_data_and_get_counts(data, attribute, threshold):
-    if threshold is not None:
-        return split_data_and_get_counts_threshold(data, attribute, threshold)
-
-    subsets = defaultdict(lambda: [])
-    pos_neg = defaultdict(lambda: [0, 0])
-
-    for item in data:
-        subsets[item[attribute]].append(item)
-        if item['class'] == 0:
-            pos_neg[item[attribute]][0] += 1
-        else:
-            pos_neg[item[attribute]][1] += 1
-
-    return subsets, {key: tuple(pos_neg[key]) for key in pos_neg.keys()}
-
-
-def split_data_and_get_counts_threshold(data, attribute, threshold):
-
-    subsets = {'below': [], 'above': []}
-    pos_neg = {'below': [0, 0], 'above': [0, 0]}
-
-    for item in data:
-        if item[attribute] < threshold:
-            subsets['below'].append(item)
-            if item['class'] == 0:
-                pos_neg['below'][0] += 1
-            else:
-                pos_neg['below'][1] += 1
-        else:
-            subsets['above'].append(item)
-            if item['class'] == 0:
-                pos_neg['above'][0] += 1
-            else:
-                pos_neg['above'][1] += 1
-
-    return subsets, {key: tuple(pos_neg[key]) for key in pos_neg.keys()}
-"""
 
 
 def remove_node(node):
@@ -454,3 +404,50 @@ def remove_node(node):
         return False
     node.parent.children.remove(node)
     return True
+
+
+def chi_square_prune(node):
+    #find a list of nodes that only has leaf node as descendent
+    if len(node.children) == 0:
+        return
+
+    for child in node.children:
+        chi_square_prune(child)
+
+    score = 0
+    for child in node.children:
+        observed = []
+        expected = []
+
+        observed.append(child.actual_pos)
+        observed.append(child.actual_neg)
+
+        expectedPos = node.actual_pos * (child.actual_pos+child.actual_neg) / (node.actual_pos + node.actual_neg)
+        expectedNeg = node.actual_neg * (child.actual_pos+child.actual_neg) / (node.actual_pos + node.actual_neg)
+
+        if child.actual_pos == 0 and child.actual_neg == 0:
+            continue
+
+        score += math.pow((child.actual_pos - expectedPos), 2) / expectedPos + math.pow((child.actual_neg - expectedNeg), 2) / expectedNeg
+
+
+        expected.append(expectedPos)
+        expected.append(expectedNeg)
+
+    #when the length of the arguments is 1, the p-value is nan
+    score, p =stats.chisquare(f_obs= observed, f_exp= expected)
+    #for x in range(len(observed)):
+    #    score += (((observed[x] - expected[x])**2) / expected[x])
+        
+    # score = (((observed - expected)**2) / expected).sum()
+    #print(score,p)
+    degree_freedom= node.actual_pos + node.actual_neg - 1
+    #critical_value = stats.chi2.ppf(q=0.95, df=degree_freedom)
+    #print("crit ",critical_value)
+    if p > 0.95:
+    #     print("Yes")
+    #     test_node.children = []
+    #if score < critical_value:
+        #print("trim")
+        node.children = []
+

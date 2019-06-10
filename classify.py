@@ -12,9 +12,6 @@ from sklearn.metrics import f1_score
 from sklearn.linear_model import LogisticRegression
 import matplotlib.pyplot as plt
 
-import warnings
-# warnings.filterwarnings('ignore')
-
 
 def parse_args():
     """Function for handling command-line arguments.
@@ -146,7 +143,7 @@ def main():
     elif args.csp:
         print('Pruning decision tree (chi-square)...')
         dtcs_start = time.time()
-        dt.chi_square_prune(tree, data)
+        dt.chi_square_prune(tree)
         print('Decision tree pruned (chi-square) in ' + str(time.time() - dtcs_start) + ' s.')
         dtcs_metrics = compute_metrics(dt.decision_tree_classify, test_data, [tree])
 
@@ -219,6 +216,7 @@ def main():
         metrics_perceptron = (perceptron_metrics[0], perceptron_metrics[1], perceptron_metrics[2], perceptron_metrics[3])
         metrics_lr = (lr_metrics[0], lr_metrics[1], lr_metrics[2], lr_metrics[3])
         metrics_dtre = None
+        metrics_dtcs = None
         if args.rep:
             metrics_dtre = (dtre_metrics[0], dtre_metrics[1], dtre_metrics[2], dtre_metrics[3])
         elif args.csp:
