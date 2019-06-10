@@ -3,6 +3,7 @@ from load_data import get_labels
 from collections import defaultdict
 from sklearn.metrics import f1_score
 import math
+from scipy.stats import chi2
 
 
 class Node:
@@ -16,11 +17,6 @@ class Node:
              is not passed on to a child of the current node.
     category -- The subcategory that this node belongs to based on the attribute of its parent.
     threshold -- If the node's attribute is continuous, the value it splits on.
-    tested -- This variable is used exclusively for reduced error pruning. Once we have determined
-    that this node should not be pruned, we set this flag to prevent the node from being tested 
-    multiple times. Storing this flag as an instance variable is the most efficient way to do 
-    determine if a node has already been tested.
-
 
     """
     def __init__(self, category=None, label=-1):
@@ -30,7 +26,6 @@ class Node:
         self.label = label
         self.category = category
         self.threshold = None
-        self.tested = False
 
     def display(self, max_level=3, level=0):
         """Simple method which prints the contents of the decision tree up to max_level
@@ -59,12 +54,13 @@ def decision_tree_classify(item, node):
                 return decision_tree_classify(item, child)
     else:
         for child in node.children:
-            if int(category) < node.threshold and child.category == 'below':
+            if category < node.threshold and child.category == 'below':
                 return decision_tree_classify(item, child)
-            if int(category) >= node.threshold and child.category == 'above':
+            if category >= node.threshold and child.category == 'above':
                 return decision_tree_classify(item, child)
 
     return node.label
+
 
 def build_decision_tree(data, max_depth=None, forced_attribute=None):
     """Creates a decision tree recursively based on training data. Continuous attributes
@@ -140,8 +136,8 @@ def split_on_attribute(data, attribute, threshold=None):
     attribute --- The attribute to split the data on.
     threshold --- The threshold to split the data on if the attribute is continuous.
 
-    Returns --- A tuple (subset, category) where category is a subcategory of the given attribute
-                and subset is the subset of the data which correspond to that subcategory.
+    Returns --- A list of tuples (subset, category) where category is a subcategory of the 
+    given attribute and subset is the subset of the data which correspond to that subcategory.
     """
     if threshold is not None:
         return split_on_attribute_threshold(data, attribute, threshold)
@@ -160,7 +156,7 @@ def split_on_attribute_threshold(data, attribute, threshold):
     data_categories = {'below': [], 'above': []}
 
     for data_point in data:
-        if int(data_point[attribute]) < threshold:
+        if data_point[attribute] < threshold:
             data_categories['below'].append(data_point)
         else:
             data_categories['above'].append(data_point)
@@ -214,11 +210,11 @@ def get_counts_threshold(data, attribute, threshold):
     """
     counts = {'below': [0, 0], 'above': [0, 0]}
     for item in data:
-        if item['class'] == 0 and int(item[attribute]) < threshold:
+        if item['class'] == 0 and item[attribute] < threshold:
             counts['below'][0] += 1
-        elif item['class'] == 0 and int(item[attribute]) >= threshold:
+        elif item['class'] == 0 and item[attribute] >= threshold:
             counts['above'][0] += 1
-        elif item['class'] == 1 and int(item[attribute]) < threshold:
+        elif item['class'] == 1 and item[attribute] < threshold:
             counts['below'][1] += 1
         else:
             counts['above'][1] += 1
@@ -253,7 +249,7 @@ def find_threshold(data, attribute):
 
         previous_class = sorted_data[x]['class']
 
-    return int(best_threshold)
+    return best_threshold
 
 
 def get_information_gain(data, attribute, threshold=None):
@@ -378,6 +374,74 @@ def _reduced_error_prune(root, node, score, val_data, val_labels):
         parent.children.append(node)
 
     return score
+
+
+def chi_square_prune(node, data):
+
+    if len(node.children) == 0:
+        return
+
+    subsets, pos_neg = split_data_and_get_counts(data, node.attribute, node.threshold)
+
+    for child in node.children:
+        chi_square_prune(child, subsets[child.category])
+
+    p = len([item for item in data if item['class'] == 1])
+    n = len(data) - p
+    delta = 0
+    # conduct chi square test 
+    for child in node.children:
+        p_k = pos_neg[child.category][0]
+        n_k = pos_neg[child.category][1]  
+        p_expected = p * (p_k + n_k) / (p + n)
+        n_expected = n * (p_k + n_k) / (p + n)
+        if n_expected == 0 or p_expected == 0:
+            delta = 0
+        else:
+            delta += math.pow((p_k - p_expected), 2) / p_expected + math.pow((n_k - n_expected), 2) / n_expected
+
+        if 1 - chi2.cdf(delta, len(data) - 1) > 0.05:  # Accept null hypothesis
+            remove_node(child)
+            print('pruned')
+
+
+def split_data_and_get_counts(data, attribute, threshold):
+    if threshold is not None:
+        return split_data_and_get_counts_threshold(data, attribute, threshold)
+
+    subsets = defaultdict(lambda: [])
+    pos_neg = defaultdict(lambda: [0, 0])
+
+    for item in data:
+        subsets[item[attribute]].append(item)
+        if item['class'] == 0:
+            pos_neg[item[attribute]][0] += 1
+        else:
+            pos_neg[item[attribute]][1] += 1
+
+    return subsets, {key: tuple(pos_neg[key]) for key in pos_neg.keys()}
+
+
+def split_data_and_get_counts_threshold(data, attribute, threshold):
+
+    subsets = {'below': [], 'above': []}
+    pos_neg = {'below': [0, 0], 'above': [0, 0]}
+
+    for item in data:
+        if item[attribute] < threshold:
+            subsets['below'].append(item)
+            if item['class'] == 0:
+                pos_neg['below'][0] += 1
+            else:
+                pos_neg['below'][1] += 1
+        else:
+            subsets['above'].append(item)
+            if item['class'] == 0:
+                pos_neg['above'][0] += 1
+            else:
+                pos_neg['above'][1] += 1
+
+    return subsets, {key: tuple(pos_neg[key]) for key in pos_neg.keys()}
 
 
 def remove_node(node):

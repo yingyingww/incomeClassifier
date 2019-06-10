@@ -1,7 +1,3 @@
-from load_data import represents_integer, extract_features, get_labels
-from collections import defaultdict
-
-import math
 import numpy as np
 
 
@@ -30,7 +26,6 @@ def perceptron(feature_vectors, labels, max_iter):
                 weights = weights + true_label * x
 
     return weights
-
 
 
 def perceptron_test(test_features, weights):

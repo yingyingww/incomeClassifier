@@ -17,8 +17,11 @@ import warnings
 
 
 def parse_args():
+    """Function for handling command-line arguments.
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument('--rep', action='store_true', help='Conduct reduced error pruning on the decision tree. It\'s recommended to supply a maximum depth parameter when conducting rpe pruning as this algorithm can take a long time to run otherwise.')
+    parser.add_argument('--csp', action='store_true', help='Conduct chi square pruning on the decision tree.')
     parser.add_argument('--depth', type=int, help='The maximum depth of the decision tree.')
     parser.add_argument('--plot', action='store_true', help='Plot the accuracy, precision, recall, and f1-score of the classifiers run.')
     parser.add_argument('--lr_top', type=int, help='Get the n largest positively weighted features from the logistic regression model.')
@@ -52,10 +55,6 @@ def compute_metrics(classifier, test_data, params):
     return correct / len(test_data), precision_score(y_true, y_pred), recall_score(y_true, y_pred), f1_score(y_true, y_pred)
 
 
-def tune_lr_model(model, val_X, val_y):
-    pass
-
-
 def get_lr_top_weights(model, num_features, feature_names):
     """Gets the features with the highest weights (positive and negative) from a logistic regression model.
 
@@ -76,7 +75,7 @@ def get_lr_top_weights(model, num_features, feature_names):
     return [feature_names[index] for index in best_indices], [feature_names[index] for index in worst_indices]
 
 
-def plot_metrics(metrics_baseline, metrics_dt, metrics_perceptron, metrics_lr, metrics_dtre=None):
+def plot_metrics(metrics_baseline, metrics_dt, metrics_perceptron, metrics_lr, metrics_dtre=None, metrics_dtcs=None):
     """Creates a bar chart to display the accuracy, precision, recall, and f1-score of the 
     classifiers.
 
@@ -85,7 +84,7 @@ def plot_metrics(metrics_baseline, metrics_dt, metrics_perceptron, metrics_lr, m
     perceptron, logistic regression, and optionally decision tree w/ reduced error pruning 
     classifiers.
     """
-    n_groups = 4 if metrics_dtre is not None else 5
+    n_groups = 4
 
     plt.subplots()
     index = np.arange(n_groups)
@@ -98,6 +97,8 @@ def plot_metrics(metrics_baseline, metrics_dt, metrics_perceptron, metrics_lr, m
     plt.bar(index + 3 * bar_width, metrics_lr, bar_width, alpha=opacity, color='y', label='Logistic Regression')
     if metrics_dtre is not None:
         plt.bar(index + 4 * bar_width, metrics_dtre, bar_width, alpha=opacity, color='c', label='Decision Tree (Reduced Error Pruning)')
+    elif metrics_dtcs is not None:
+        plt.bar(index + 4 * bar_width, metrics_dtcs, bar_width, alpha=opacity, color='m', label='Decision Tree (Chi-Square Pruning)')
 
     plt.title('Metrics by classifier')
     plt.xticks(index + bar_width, ('Accuracy', 'Precision', 'Recall', 'F1-score'))
@@ -142,6 +143,12 @@ def main():
         dt.reduced_error_prune(tree, val_data)
         print('Decision tree pruned (reduced error) in ' + str(time.time() - dtre_start) + ' s.')
         dtre_metrics = compute_metrics(dt.decision_tree_classify, test_data, [tree])
+    elif args.csp:
+        print('Pruning decision tree (chi-square)...')
+        dtcs_start = time.time()
+        dt.chi_square_prune(tree, data)
+        print('Decision tree pruned (chi-square) in ' + str(time.time() - dtcs_start) + ' s.')
+        dtcs_metrics = compute_metrics(dt.decision_tree_classify, test_data, [tree])
 
     y_train = get_labels(data)
     y_test = get_labels(test_data)
@@ -187,6 +194,12 @@ def main():
         print('Precision: ' + str(dtre_metrics[1]))
         print('Recall: ' + str(dtre_metrics[2]))
         print('F1 Score: ' + str(dtre_metrics[3]))
+    elif args.csp:
+        print('\nDecision Tree (w/ chi-square pruning):')
+        print('Accuracy: ' + str(dtcs_metrics[0]))
+        print('Precision: ' + str(dtcs_metrics[1]))
+        print('Recall: ' + str(dtcs_metrics[2]))
+        print('F1 Score: ' + str(dtcs_metrics[3]))
 
     print('\nPerceptron:')
     print('Accuracy: ' + str(perceptron_metrics[0]))
@@ -208,6 +221,8 @@ def main():
         metrics_dtre = None
         if args.rep:
             metrics_dtre = (dtre_metrics[0], dtre_metrics[1], dtre_metrics[2], dtre_metrics[3])
+        elif args.csp:
+            metrics_dtcs = (dtcs_metrics[0], dtcs_metrics[1], dtcs_metrics[2], dtcs_metrics[3])
         plot_metrics(metrics_baseline, metrics_dt, metrics_perceptron, metrics_lr, metrics_dtre)
 
 
