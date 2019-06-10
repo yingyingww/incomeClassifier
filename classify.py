@@ -223,7 +223,7 @@ def main():
             metrics_dtre = (dtre_metrics[0], dtre_metrics[1], dtre_metrics[2], dtre_metrics[3])
         elif args.csp:
             metrics_dtcs = (dtcs_metrics[0], dtcs_metrics[1], dtcs_metrics[2], dtcs_metrics[3])
-        plot_metrics(metrics_baseline, metrics_dt, metrics_perceptron, metrics_lr, metrics_dtre)
+        plot_metrics(metrics_baseline, metrics_dt, metrics_perceptron, metrics_lr, metrics_dtre, metrics_dtcs)
 
 
 if __name__ == "__main__":

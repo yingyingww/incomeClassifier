@@ -374,7 +374,7 @@ def _reduced_error_prune(root, node, score, val_data, val_labels):
         parent.children.append(node)
 
     return score
-
+"""
 
 def chi_square_prune(node, data):
 
@@ -442,6 +442,7 @@ def split_data_and_get_counts_threshold(data, attribute, threshold):
                 pos_neg['above'][1] += 1
 
     return subsets, {key: tuple(pos_neg[key]) for key in pos_neg.keys()}
+"""
 
 
 def remove_node(node):
