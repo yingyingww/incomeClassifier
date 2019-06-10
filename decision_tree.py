@@ -17,6 +17,8 @@ class Node:
              is not passed on to a child of the current node.
     category -- The subcategory that this node belongs to based on the attribute of its parent.
     threshold -- If the node's attribute is continuous, the value it splits on.
+    actual_pos, negative_pos -- The number of positive and negative instances in the training
+             data passed to this node. This is used for chi-square pruning.
 
     """
     def __init__(self, category=None, label=-1):
@@ -71,6 +73,8 @@ def build_decision_tree(data, max_depth=None, forced_attribute=None):
     Arguments:
     data --- A list of dictionaries as outputted by load_data in load_data.py.
     max_depth --- The maximum depth of the decision tree.
+    forced_attribute --- Force an attribute to be split on first rather than selecting the
+    one with the highest info gain. Used for the baseline.
     """
     root = Node()
     for item in data:
@@ -80,7 +84,7 @@ def build_decision_tree(data, max_depth=None, forced_attribute=None):
             root.actual_pos += 1
 
     attributes = [attribute for attribute in data[0]]
-    attributes.remove('fnlwgt')
+    attributes.remove('fnlwgt')  # Removed this attribute to speed up computation time
     attributes.remove('class')
     _build_decision_tree(data, root, attributes, max_depth, forced_attribute=forced_attribute)
     return root
@@ -92,16 +96,15 @@ def _build_decision_tree(data, node, attributes, max_depth=None, depth=0, forced
     depth += 1
     data_classes = [data_point['class'] for data_point in data]
     node.label = majority_label(data)
-    if len(attributes) == 0 or len(set(data_classes)) == 1:
-        return
-    #  if examples have exactly the same attributes, stop recursing
+    if len(attributes) == 0 or len(set(data_classes)) == 1:  
+        return  # Base case - if out of attributes or only one label, return
     if max_depth is not None and depth > max_depth:
         return
 
     max_information_gain = -1
     best_attribute = None
     best_threshold = None
-    for attribute in attributes:
+    for attribute in attributes:  # Find attribute with highest info gain
         threshold = None
         if(represents_integer(data[0][attribute])):
             threshold = find_threshold(data, attribute)
@@ -133,6 +136,7 @@ def _build_decision_tree(data, node, attributes, max_depth=None, depth=0, forced
                 pos_label_num += 1
             else:
                 neg_label_num += 1
+
         new_node = Node(category=subset[1])
         new_node.actual_pos = pos_label_num
         new_node.actual_neg = neg_label_num
@@ -388,7 +392,7 @@ def _reduced_error_prune(root, node, score, val_data, val_labels):
     new_score = f1_score(val_labels, y_pred)
     if new_score > score:
         score = new_score
-        print('Current F1-score: ' + str(new_score) + ' Continuing pruning...')
+        print('Current F1-score: ' + str(new_score) + ' Continuing RE pruning...')
     else:
         parent.children.append(node)
 
@@ -407,14 +411,15 @@ def remove_node(node):
 
 
 def chi_square_prune(node):
-    #find a list of nodes that only has leaf node as descendent
+    """Conducts chi-square pruning on the given tree. Does not appear to work as intended at the
+        moment.
+    """
     if len(node.children) == 0:
         return
 
     for child in node.children:
         chi_square_prune(child)
 
-    score = 0
     for child in node.children:
         observed = []
         expected = []
@@ -422,32 +427,17 @@ def chi_square_prune(node):
         observed.append(child.actual_pos)
         observed.append(child.actual_neg)
 
-        expectedPos = node.actual_pos * (child.actual_pos+child.actual_neg) / (node.actual_pos + node.actual_neg)
-        expectedNeg = node.actual_neg * (child.actual_pos+child.actual_neg) / (node.actual_pos + node.actual_neg)
+        expectedPos = node.actual_pos * (child.actual_pos + child.actual_neg) / (node.actual_pos + node.actual_neg)
+        expectedNeg = node.actual_neg * (child.actual_pos + child.actual_neg) / (node.actual_pos + node.actual_neg)
 
         if child.actual_pos == 0 and child.actual_neg == 0:
             continue
 
-        score += math.pow((child.actual_pos - expectedPos), 2) / expectedPos + math.pow((child.actual_neg - expectedNeg), 2) / expectedNeg
-
-
         expected.append(expectedPos)
         expected.append(expectedNeg)
 
-    #when the length of the arguments is 1, the p-value is nan
-    score, p =stats.chisquare(f_obs= observed, f_exp= expected)
-    #for x in range(len(observed)):
-    #    score += (((observed[x] - expected[x])**2) / expected[x])
+    score, q = stats.chisquare(f_obs=observed, f_exp=expected)
+    p = 1 - q
         
-    # score = (((observed - expected)**2) / expected).sum()
-    #print(score,p)
-    degree_freedom= node.actual_pos + node.actual_neg - 1
-    #critical_value = stats.chi2.ppf(q=0.95, df=degree_freedom)
-    #print("crit ",critical_value)
-    if p > 0.95:
-    #     print("Yes")
-    #     test_node.children = []
-    #if score < critical_value:
-        #print("trim")
-        node.children = []
-
+    if p < 0.05:
+        node.children = []  # remove from tree

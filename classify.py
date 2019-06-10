@@ -112,7 +112,7 @@ def main():
     test_data = load_data('data/adult.test2')
     val_data = load_data('data/adult.val')
 
-    if args.depth_plot:
+    if args.depth_plot: 
         print('Calculating f1-scores for different depths...')
         depths, scores = dt.tune_max_depth(data, val_data)
         plt.plot(depths, scores)
@@ -215,8 +215,7 @@ def main():
         metrics_dt = (dt_metrics[0], dt_metrics[1], dt_metrics[2], dt_metrics[3])
         metrics_perceptron = (perceptron_metrics[0], perceptron_metrics[1], perceptron_metrics[2], perceptron_metrics[3])
         metrics_lr = (lr_metrics[0], lr_metrics[1], lr_metrics[2], lr_metrics[3])
-        metrics_dtre = None
-        metrics_dtcs = None
+        metrics_dtre, metrics_dtcs = None, None
         if args.rep:
             metrics_dtre = (dtre_metrics[0], dtre_metrics[1], dtre_metrics[2], dtre_metrics[3])
         elif args.csp:
