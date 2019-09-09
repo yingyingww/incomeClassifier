@@ -1,3 +1,6 @@
+CS 321 Artificial Intelligence Final Project
+Ari Conati & Yingying Wang
+
 Relevant data is contained within the data directory. The adult.data and adult.test files contain
 the original training and test data, respectively. We split the adult.test file into adult.val
 and adult.test2, with adult.val being used as our validation set and adult.test2 being used
